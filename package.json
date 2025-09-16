@@ -1,0 +1,56 @@
+{
+  "name": "migration-smush",
+  "version": "1.0.0",
+  "description": "A standalone Bun-powered tool to consolidate multiple Prisma migrations into a single migration while tracking missing queries",
+  "main": "smush.ts",
+  "type": "module",
+  "scripts": {
+    "help": "bun smush.ts --help",
+    "type-check": "bunx tsc --noEmit",
+    "lint": "bunx tsc --noEmit && echo 'Type checking passed ✅'",
+    "dev": "bun run help",
+    "test": "bun run type-check"
+  },
+  "bin": {
+    "smush": "./smush.ts"
+  },
+  "keywords": [
+    "prisma",
+    "migration",
+    "consolidation",
+    "database",
+    "sql",
+    "typescript",
+    "bun",
+    "cli-tool",
+    "schema-migration",
+    "database-migration"
+  ],
+  "author": "RankedNullity",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "prisma": "^6.16.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "@types/bun": "latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RankedNullity/smush.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RankedNullity/smush/issues"
+  },
+  "homepage": "https://github.com/RankedNullity/smush#readme",
+  "files": [
+    "*.ts",
+    "*.json",
+    "README.md",
+    "LICENSE"
+  ]
+}
