@@ -129,7 +129,7 @@ After running the tool, you'll find:
 > **🚨 DATABASE RESET WARNING**  
 > Step 2 performs `prisma migrate reset --force` which **completely resets your database**!
 > Make sure the prisma instance you are on is EMPTY for this tool to work properly. 
-> As usual, make sure to backup everything before using. 
+**DO NOT USE THIS ON PRODUCTION. USE THIS LOCALLY TO GENERATE THE FILES, THEN APPLY THEM TO PRODUCTION AS NEEDED**
 
 **Safety Checklist:**
 - ✅ Only use in **development environments**
