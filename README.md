@@ -1,4 +1,4 @@
-# Migration Smush
+# Smush (Prisma Migrations)
 
 A standalone Bun-powered tool to consolidate multiple Prisma migrations into a single migration while tracking any queries that might not be included in the new consolidated migration.
 
@@ -163,3 +163,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 **Made with ⚡ Bun and ❤️ for the Prisma community**
+
