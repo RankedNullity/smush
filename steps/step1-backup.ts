@@ -96,6 +96,131 @@ function getFilterInfo(query: string): {
   return { shouldFilter: false };
 }
 
+// Helper function to apply dynamic CREATE/DROP filtering
+function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
+  // Pattern to capture CREATE statements with the object type and name
+  const createPattern = /CREATE\s+(TABLE|INDEX|TYPE|FUNCTION|PROCEDURE|TRIGGER|SEQUENCE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+  
+  // Pattern to capture DROP statements with the object type and name
+  const dropPattern = /DROP\s+(TABLE|INDEX|TYPE|FUNCTION|PROCEDURE|TRIGGER|SEQUENCE|VIEW)\s+(?:IF\s+EXISTS\s+)?[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+
+  // Pattern to capture ADD CONSTRAINT statements (multiple forms)
+  const addConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+  
+  // Pattern to capture DROP CONSTRAINT statements  
+  const dropConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+DROP\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+
+  // Pattern to capture ADD FOREIGN KEY statements (alternative syntax)
+  const addForeignKeyPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+FOREIGN\s+KEY\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+
+  // Pattern to capture named CHECK constraints
+  const addCheckConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+CHECK/i;
+
+  // Find all CREATE and DROP statements
+  const creates: Array<{ query: MigrationQuery; type: string; name: string; index: number }> = [];
+  const drops: Array<{ query: MigrationQuery; type: string; name: string; index: number }> = [];
+  
+  // Find all ADD CONSTRAINT and DROP CONSTRAINT statements
+  const addConstraints: Array<{ query: MigrationQuery; table: string; constraint: string; index: number }> = [];
+  const dropConstraints: Array<{ query: MigrationQuery; table: string; constraint: string; index: number }> = [];
+
+  queries.forEach((query, index) => {
+    if (query.isFilteredQuery) return; // Skip already filtered queries
+    
+    const createMatch = query.query.match(createPattern);
+    if (createMatch && createMatch[1] && createMatch[2]) {
+      creates.push({
+        query,
+        type: createMatch[1].toUpperCase(),
+        name: createMatch[2].toLowerCase(),
+        index
+      });
+    }
+
+    const dropMatch = query.query.match(dropPattern);
+    if (dropMatch && dropMatch[1] && dropMatch[2]) {
+      drops.push({
+        query,
+        type: dropMatch[1].toUpperCase(),
+        name: dropMatch[2].toLowerCase(),
+        index
+      });
+    }
+
+    const addConstraintMatch = query.query.match(addConstraintPattern);
+    if (addConstraintMatch && addConstraintMatch[1] && addConstraintMatch[2]) {
+      addConstraints.push({
+        query,
+        table: addConstraintMatch[1].toLowerCase(),
+        constraint: addConstraintMatch[2].toLowerCase(),
+        index
+      });
+    }
+
+    // Also check for ADD FOREIGN KEY (alternative syntax)
+    const addForeignKeyMatch = query.query.match(addForeignKeyPattern);
+    if (addForeignKeyMatch && addForeignKeyMatch[1] && addForeignKeyMatch[2]) {
+      addConstraints.push({
+        query,
+        table: addForeignKeyMatch[1].toLowerCase(),
+        constraint: addForeignKeyMatch[2].toLowerCase(),
+        index
+      });
+    }
+
+    // Also check for named CHECK constraints
+    const addCheckConstraintMatch = query.query.match(addCheckConstraintPattern);
+    if (addCheckConstraintMatch && addCheckConstraintMatch[1] && addCheckConstraintMatch[2]) {
+      addConstraints.push({
+        query,
+        table: addCheckConstraintMatch[1].toLowerCase(),
+        constraint: addCheckConstraintMatch[2].toLowerCase(),
+        index
+      });
+    }
+
+    const dropConstraintMatch = query.query.match(dropConstraintPattern);
+    if (dropConstraintMatch && dropConstraintMatch[1] && dropConstraintMatch[2]) {
+      dropConstraints.push({
+        query,
+        table: dropConstraintMatch[1].toLowerCase(),
+        constraint: dropConstraintMatch[2].toLowerCase(),
+        index
+      });
+    }
+  });
+
+  // Filter out CREATE statements that have corresponding DROP statements after them
+  creates.forEach(create => {
+    const correspondingDrop = drops.find(drop => 
+      drop.type === create.type && 
+      drop.name === create.name && 
+      drop.index > create.index // DROP must come after CREATE
+    );
+
+    if (correspondingDrop) {
+      create.query.isFilteredQuery = true;
+      create.query.filterReason = `CREATE ${create.type} "${create.name}" is made redundant by later DROP ${correspondingDrop.type} "${correspondingDrop.name}"`;
+      console.log(`🔄 Dynamic filter: CREATE ${create.type} "${create.name}" → filtered (has later DROP)`);
+    }
+  });
+
+  // Filter out ADD CONSTRAINT statements that have corresponding DROP CONSTRAINT statements after them
+  addConstraints.forEach(addConstraint => {
+    const correspondingDropConstraint = dropConstraints.find(dropConstraint => 
+      dropConstraint.table === addConstraint.table && 
+      dropConstraint.constraint === addConstraint.constraint && 
+      dropConstraint.index > addConstraint.index // DROP CONSTRAINT must come after ADD CONSTRAINT
+    );
+
+    if (correspondingDropConstraint) {
+      addConstraint.query.isFilteredQuery = true;
+      addConstraint.query.filterReason = `ADD CONSTRAINT "${addConstraint.constraint}" on table "${addConstraint.table}" is made redundant by later DROP CONSTRAINT "${correspondingDropConstraint.constraint}"`;
+      console.log(`🔄 Dynamic filter: ADD CONSTRAINT "${addConstraint.constraint}" on "${addConstraint.table}" → filtered (has later DROP CONSTRAINT)`);
+    }
+  });
+}
+
 // Helper function to extract queries from a migration file
 function extractQueriesFromFile(
   filePath: string,
@@ -172,6 +297,10 @@ if (fs.existsSync(lockFile)) {
   fs.copyFileSync(lockFile, backupLockFile);
   console.log("✅ Backed up migration_lock.toml");
 }
+
+// Apply dynamic CREATE/DROP filtering after all queries are collected
+console.log("\n🔄 Applying dynamic CREATE/DROP filtering...");
+applyDynamicCreateDropFiltering(queryTable);
 
 // Save query table for next steps
 fs.writeFileSync(queryTablePath, JSON.stringify(queryTable, null, 2));

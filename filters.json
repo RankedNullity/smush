@@ -1,6 +1,6 @@
 {
   "title": "Migration Smush Filter Configuration",
-  "description": "Configuration for filtering SQL queries during migration consolidation",
+  "description": "Configuration for filtering SQL queries during migration consolidation. Includes both pattern-based filters and dynamic CREATE/DROP analysis.",
   "filters": [
     {
       "name": "DROP operations",
@@ -45,12 +45,33 @@
       "reason": "ALTER TYPE operations should reflect the most up-to-date type definition from schema",
       "enabled": true
     },
+    {
+      "name": "CREATE TYPE operations",
+      "patterns": [
+        "^CREATE\\s+TYPE"
+      ],
+      "reason": "CREATE TYPE operations will be up to date with the generated Prisma schema",
+      "enabled": true
+    },
+    {
+      "name": "ALTER COLUMN operations",
+      "patterns": [
+        "ALTER\\s+TABLE.*ALTER\\s+COLUMN",
+        "ALTER\\s+COLUMN"
+      ],
+      "reason": "ALTER COLUMN operations will be up to date with the generated Prisma schema",
+      "enabled": true
+    },
 
     {
       "name": "Data seeding operations",
       "patterns": [
-        "^INSERT\\s+INTO",
-        "^UPDATE\\s+.*SET"
+        "^\\s*INSERT\\s+INTO\\s+[`\"']?\\w+[`\"']?",
+        "^\\s*UPDATE\\s+[`\"']?\\w+[`\"']?\\s+SET\\s+",
+        "\\bINSERT\\s+INTO\\s+[`\"']?\\w+[`\"']?",
+        "\\bUPDATE\\s+[`\"']?\\w+[`\"']?\\s+SET\\s+",
+        "INSERT\\s+INTO\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?",
+        "UPDATE\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?\\s+SET"
       ],
       "reason": "Data seeding should be handled separately from schema migrations",
       "enabled": true
@@ -73,5 +94,12 @@
       "reason": "CREATE INDEX operations may be custom and should be reviewed",
       "enabled": false
     }
-  ]
+  ],
+  "dynamicFiltering": {
+    "description": "In addition to pattern-based filters above, the tool automatically applies dynamic CREATE/DROP analysis",
+    "explanation": "Any CREATE statement (TABLE, INDEX, TYPE, etc.) that is followed by a corresponding DROP statement of the same object will be automatically filtered out as redundant",
+    "constraintFiltering": "ADD CONSTRAINT statements that are followed by corresponding DROP CONSTRAINT statements on the same table/constraint will also be filtered as redundant",
+    "supportedObjects": ["TABLE", "INDEX", "TYPE", "FUNCTION", "PROCEDURE", "TRIGGER", "SEQUENCE", "VIEW"],
+    "supportedConstraints": ["CONSTRAINT", "FOREIGN KEY", "CHECK", "UNIQUE", "PRIMARY KEY"]
+  }
 }
