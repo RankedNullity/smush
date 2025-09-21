@@ -1,12 +1,20 @@
 # Smush
 
-A standalone Bun-powered tool to consolidate multiple Prisma migrations into a single migration while tracking any queries that might not be included in the new consolidated migration.
+A standalone Bun-powered tool to consolidate multiple Prisma migrations into a single migration whi├── 📁 steps/
+│   ├── 📄 step1-backup.ts     # Backup migrations & extract/filter queries
+│   ├── 📄 step2-reset.ts      # Reset DB & generate consolidated migration
+│   ├── 📄 step3-parse.ts      # Parse new migration & update query table
+│   ├── 📄 step4-filter.ts     # Apply remaining pattern filters (legacy)
+│   └── 📄 step5-save.ts       # Save remaining queries to file
+
+Smush is a powerful tool for consolidating Prisma migrations, automatically detecting and removing redundant operations while preserving important changes.
 
 ## 🚀 Features
 
 - **🔧 Standalone tool** - No global installation required, works with any Prisma project
 - **📁 Flexible directory support** - Use `--prisma-dir=/path/to/prisma` to target any Prisma project
-- **🧠 Smart query filtering** - Configurable patterns to exclude certain types of queries
+- **🧠 Smart dynamic filtering** - Automatically detects and removes redundant CREATE/DROP pairs
+- **⚙️ Configurable pattern filters** - Customizable regex patterns to exclude specific query types
 - **📊 Detailed tracking** - Saves filtered queries with explanations for manual review
 - **🧹 Clean operation** - Automatic backup and cleanup with no side effects
 - **⚡ Database reset approach** - Generates truly consolidated migrations from your current schema
@@ -53,10 +61,10 @@ bun smush.ts 1,4,5 --prisma-dir=/path/to/your/prisma      # Steps 1, 4, and 5 on
 bun smush.ts 2 --prisma-dir=/path/to/your/prisma          # Step 2 only
 
 # Individual step scripts (advanced usage)
-bun run step1 --prisma-dir=/path/to/your/prisma    # Backup migrations and extract queries
-bun run step2 --prisma-dir=/path/to/your/prisma    # Reset database and generate consolidated migration  
+bun run step1 --prisma-dir=/path/to/your/prisma    # Backup migrations and extract/filter queries  
+bun run step2 --prisma-dir=/path/to/your/prisma    # Reset database and generate consolidated migration
 bun run step3 --prisma-dir=/path/to/your/prisma    # Parse new migration and clean query table
-bun run step4 --prisma-dir=/path/to/your/prisma    # Filter queries based on patterns
+bun run step4 --prisma-dir=/path/to/your/prisma    # Apply remaining pattern filters (legacy step)
 bun run step5 --prisma-dir=/path/to/your/prisma    # Save remaining queries to file
 ```
 
@@ -64,7 +72,17 @@ bun run step5 --prisma-dir=/path/to/your/prisma    # Save remaining queries to f
 
 ### Customizing Query Filters
 
-Edit `filters.json` to control which SQL queries are excluded from the consolidated migration:
+Smush uses a **two-stage filtering system** to intelligently remove redundant SQL queries:
+
+#### Stage 1: Dynamic CREATE/DROP Analysis
+Automatically detects and removes redundant CREATE/DROP pairs by analyzing the migration chronologically:
+- **Objects**: Tables, indexes, views, functions, etc.
+- **Constraints**: Primary keys, foreign keys, unique constraints, check constraints, etc.
+
+If a `CREATE X` statement is followed by a `DROP X` for the same object/constraint, both are removed as redundant.
+
+#### Stage 2: Pattern-Based Filtering 
+Uses configurable regex patterns from `filters.json`:
 
 ```json
 {
@@ -90,6 +108,8 @@ Edit `filters.json` to control which SQL queries are excluded from the consolida
 - `patterns` - Array of regex patterns to match SQL queries
 - `reason` - Explanation for why matching queries are filtered out
 - `enabled` - Whether this filter is currently active
+
+> **💡 Pro Tip**: Dynamic filtering runs first to preserve DROP statements needed for analysis, then pattern filtering applies to the remaining queries.
 
 ## 📁 Project Structure
 

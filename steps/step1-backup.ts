@@ -98,23 +98,34 @@ function getFilterInfo(query: string): {
 
 // Helper function to apply dynamic CREATE/DROP filtering
 function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
+  console.log(`🔄 Applying dynamic CREATE/DROP filtering to ${queries.length} queries...`);
+  
   // Pattern to capture CREATE statements with the object type and name
-  const createPattern = /CREATE\s+(TABLE|INDEX|TYPE|FUNCTION|PROCEDURE|TRIGGER|SEQUENCE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+  const createPattern = /CREATE\s+(?:UNIQUE\s+)?(TABLE|INDEX|TYPE|FUNCTION|PROCEDURE|TRIGGER|SEQUENCE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
   
   // Pattern to capture DROP statements with the object type and name
   const dropPattern = /DROP\s+(TABLE|INDEX|TYPE|FUNCTION|PROCEDURE|TRIGGER|SEQUENCE|VIEW)\s+(?:IF\s+EXISTS\s+)?[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
 
   // Pattern to capture ADD CONSTRAINT statements (multiple forms)
-  const addConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+  const addConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+(?:PRIMARY\s+KEY|FOREIGN\s+KEY|UNIQUE|CHECK)/i;
   
   // Pattern to capture DROP CONSTRAINT statements  
-  const dropConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+DROP\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
+  const dropConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
 
   // Pattern to capture ADD FOREIGN KEY statements (alternative syntax)
   const addForeignKeyPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+FOREIGN\s+KEY\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?/i;
 
   // Pattern to capture named CHECK constraints
   const addCheckConstraintPattern = /ALTER\s+TABLE\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+ADD\s+CONSTRAINT\s+[`"']?([a-zA-Z_][a-zA-Z0-9_]*)[`"']?\s+CHECK/i;
+
+  // Debug: Log all queries being analyzed for dynamic filtering
+  console.log(`📊 Queries to analyze for CREATE/DROP patterns:`);
+  queries.forEach((query, index) => {
+    if (!query.isFilteredQuery) {
+      const preview = query.query.substring(0, 100).replace(/\s+/g, ' ');
+      console.log(`  [${index}] ${preview}${query.query.length > 100 ? '...' : ''}`);
+    }
+  });
 
   // Find all CREATE and DROP statements
   const creates: Array<{ query: MigrationQuery; type: string; name: string; index: number }> = [];
@@ -135,6 +146,7 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
         name: createMatch[2].toLowerCase(),
         index
       });
+      console.log(`  🆕 Found CREATE: ${createMatch[1].toUpperCase()} "${createMatch[2]}" at index ${index}`);
     }
 
     const dropMatch = query.query.match(dropPattern);
@@ -145,6 +157,7 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
         name: dropMatch[2].toLowerCase(),
         index
       });
+      console.log(`  🗑️ Found DROP: ${dropMatch[1].toUpperCase()} "${dropMatch[2]}" at index ${index}`);
     }
 
     const addConstraintMatch = query.query.match(addConstraintPattern);
@@ -155,6 +168,7 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
         constraint: addConstraintMatch[2].toLowerCase(),
         index
       });
+      console.log(`  ➕ Found ADD CONSTRAINT: "${addConstraintMatch[2]}" on table "${addConstraintMatch[1]}" at index ${index}`);
     }
 
     // Also check for ADD FOREIGN KEY (alternative syntax)
@@ -166,6 +180,7 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
         constraint: addForeignKeyMatch[2].toLowerCase(),
         index
       });
+      console.log(`  ➕ Found ADD FOREIGN KEY: "${addForeignKeyMatch[2]}" on table "${addForeignKeyMatch[1]}" at index ${index}`);
     }
 
     // Also check for named CHECK constraints
@@ -177,6 +192,7 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
         constraint: addCheckConstraintMatch[2].toLowerCase(),
         index
       });
+      console.log(`  ➕ Found ADD CHECK CONSTRAINT: "${addCheckConstraintMatch[2]}" on table "${addCheckConstraintMatch[1]}" at index ${index}`);
     }
 
     const dropConstraintMatch = query.query.match(dropConstraintPattern);
@@ -187,6 +203,7 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
         constraint: dropConstraintMatch[2].toLowerCase(),
         index
       });
+      console.log(`  ➖ Found DROP CONSTRAINT: "${dropConstraintMatch[2]}" on table "${dropConstraintMatch[1]}" at index ${index}`);
     }
   });
 
@@ -219,6 +236,15 @@ function applyDynamicCreateDropFiltering(queries: MigrationQuery[]): void {
       console.log(`🔄 Dynamic filter: ADD CONSTRAINT "${addConstraint.constraint}" on "${addConstraint.table}" → filtered (has later DROP CONSTRAINT)`);
     }
   });
+
+  // Summary of dynamic filtering
+  const dynamicFilteredQueries = queries.filter(q => q.isFilteredQuery).length;
+  console.log(`📋 Dynamic filtering summary:`);
+  console.log(`  • Found ${creates.length} CREATE statements`);
+  console.log(`  • Found ${drops.length} DROP statements`);
+  console.log(`  • Found ${addConstraints.length} ADD CONSTRAINT statements`);
+  console.log(`  • Found ${dropConstraints.length} DROP CONSTRAINT statements`);
+  console.log(`  • Filtered ${dynamicFilteredQueries} redundant queries`);
 }
 
 // Helper function to extract queries from a migration file
@@ -255,11 +281,11 @@ function extractQueriesFromFile(
 
   for (const query of queries) {
     if (query.trim()) {
-      const filterInfo = getFilterInfo(query);
+      // Initially add all queries without standard filtering
       queryTable.push({
         query: query.trim(),
-        isFilteredQuery: filterInfo.shouldFilter,
-        filterReason: filterInfo.reason,
+        isFilteredQuery: false, // Will be set by dynamic filtering first, then standard filtering
+        filterReason: undefined,
         migrationFile: migrationFolder,
       });
     }
@@ -302,12 +328,29 @@ if (fs.existsSync(lockFile)) {
 console.log("\n🔄 Applying dynamic CREATE/DROP filtering...");
 applyDynamicCreateDropFiltering(queryTable);
 
+// Apply standard pattern-based filtering after dynamic filtering
+console.log("🔍 Applying standard pattern-based filtering...");
+queryTable.forEach(query => {
+  if (!query.isFilteredQuery) { // Only apply standard filters to non-dynamically filtered queries
+    const filterInfo = getFilterInfo(query.query);
+    if (filterInfo.shouldFilter) {
+      query.isFilteredQuery = true;
+      query.filterReason = filterInfo.reason;
+    }
+  }
+});
+
 // Save query table for next steps
 fs.writeFileSync(queryTablePath, JSON.stringify(queryTable, null, 2));
 
 console.log(`\n📊 Extracted ${queryTable.length} queries total`);
-console.log(
-  `📊 Filtered queries: ${queryTable.filter((q) => q.isFilteredQuery).length}`,
-);
+const dynamicFiltered = queryTable.filter((q) => q.isFilteredQuery && q.filterReason?.includes('redundant')).length;
+const patternFiltered = queryTable.filter((q) => q.isFilteredQuery && !q.filterReason?.includes('redundant')).length;
+const totalFiltered = queryTable.filter((q) => q.isFilteredQuery).length;
+
+console.log(`📊 Dynamic filtering: ${dynamicFiltered} queries`);
+console.log(`📊 Pattern filtering: ${patternFiltered} queries`);
+console.log(`📊 Total filtered: ${totalFiltered} queries`);
+console.log(`📊 Remaining queries: ${queryTable.length - totalFiltered}`);
 console.log(`💾 Query table saved to: ${queryTablePath}`);
 console.log("✅ Step 1 complete: Migrations backed up and queries extracted");

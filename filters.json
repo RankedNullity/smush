@@ -64,16 +64,16 @@
     },
 
     {
-      "name": "Data seeding operations",
+      "name": "Intermittent data operations",
       "patterns": [
         "^\\s*INSERT\\s+INTO\\s+[`\"']?\\w+[`\"']?",
-        "^\\s*UPDATE\\s+[`\"']?\\w+[`\"']?\\s+SET\\s+",
+        "^\\s*UPDATE\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?",
         "\\bINSERT\\s+INTO\\s+[`\"']?\\w+[`\"']?",
-        "\\bUPDATE\\s+[`\"']?\\w+[`\"']?\\s+SET\\s+",
+        "\\bUPDATE\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?",
         "INSERT\\s+INTO\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?",
-        "UPDATE\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?\\s+SET"
+        "UPDATE\\s+[`\"']?[a-zA-Z_][a-zA-Z0-9_]*[`\"']?\\s+\\w+"
       ],
-      "reason": "Data seeding should be handled separately from schema migrations",
+      "reason": "Data changes should be handled already as once-offs",
       "enabled": true
     },
     {
